@@ -8,7 +8,7 @@ testflight\_invite.py can be used as a stand-alone program or as part of another
 
 The script works by performing the necessary web requests to log a developer into iTunes Connect, and use the returned authentication cookies to perform the invite web request.
 
-*NOTE:* testflight\_invite.py requires your iTunes Connect password to complete the TestFlight invite. If you use the script as part of another Python project you will need to store your iTunes Connect password somewhere it can be retrieved in plaintext in order to pass to the library. On the command line your iTunes Connect password is entered using the [getpass](https://docs.python.org/2/library/getpass.html) library, will allows you to enter your password using stdin without echoing the password on the command line.
+*NOTE:* testflight\_invite.py requires your iTunes Connect password to complete the TestFlight invite. If you use the script as part of another Python project you will need to store your iTunes Connect password somewhere it can be retrieved in plaintext in order to pass to the library. On the command line your iTunes Connect password is entered using the [getpass](https://docs.python.org/2/library/getpass.html) library, which allows you to enter your password using stdin without echoing the password on the command line.
 
 ## Use as a stand-alone program
 
