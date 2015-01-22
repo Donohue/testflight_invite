@@ -1,12 +1,10 @@
-# testflight\_invite.py / testflight\_invite.rb
+# TestFlightInvite
 
-testflight\_invite is a Python / Ruby script that will add TestFlight beta testers to the iTunes Connect portal for your app.
+TestFlightInvite is a Python / Ruby script that will add TestFlight beta testers to the iTunes Connect portal for your app.
 
 # About
 
-This script was created by [Donohue](https://github.com/Donohue), I just translated it to Ruby, to be able to incorporate in my codebase.
-
-testflight\_invite can be used as a stand-alone program or as part of another Python project.
+TestFlightInvite can be used as a stand-alone program or as part of another Python / Ruby project.
 
 The script works by performing the necessary web requests to log a developer into iTunes Connect, and use the returned authentication cookies to perform the invite web request.
 
@@ -15,10 +13,9 @@ The script works by performing the necessary web requests to log a developer int
 ## Use as a stand-alone program
 
 Usage:
-```
-python testflight_invite.py <iTC login email> <App ID> <Invitee Email> <Invitee First Name (Optional)> <Invitee Last Name (Optional)>
-ruby   testflight_invite.rb <iTC login email> <iTC login password> <App ID> <Invitee Email> <Invitee First Name (Optional)> <Invitee Last Name (Optional)>
-```
+
+    python testflight_invite.py <iTC login email> <App ID> <Invitee Email> <Invitee First Name (Optional)> <Invitee Last Name (Optional)>
+    ruby   testflight_invite.rb <iTC login email> <iTC login password> <App ID> <Invitee Email> <Invitee First Name (Optional)> <Invitee Last Name (Optional)>
 
 Example Run:
 
@@ -60,5 +57,7 @@ Ruby:
 
 This script is heavily based off of the [appdailysales](https://github.com/kirbyt/appdailysales) project by [Kirby Turner](https://github.com/kirbyt) and friends.
 
-testflight\_invite was created by [Donohue](https://github.com/Donohue), I just translated it to Ruby, to be able to incorporate in my codebase.
+testflight\_invite.py was created by [Donohue](https://github.com/Donohue)
+
+testflight\_invite.rb was created by [dmagliola](https://github.com/dmagliola)
 
