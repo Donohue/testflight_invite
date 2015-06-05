@@ -58,6 +58,9 @@ module TestFlight
   class InviteDuplicateException < StandardError
   end
 
+  class RemoveTesterException < StandardError
+  end
+
   class Invite
     BASE_URL = 'itunesconnect.apple.com'
 
@@ -65,6 +68,7 @@ module TestFlight
       @itc_login = itc_login
       @itc_password = itc_password
       @app_id = app_id
+      @logged_in = false
     end
 
     def add_tester(email, first_name = '', last_name = '')
@@ -81,6 +85,37 @@ module TestFlight
       return JSON.parse(response.body)['statusCode']
     end
 
+    def remove_tester(email)
+      login
+      url = "/WebObjects/iTunesConnect.woa/ra/user/externalTesters/#{@app_id}/"
+
+      params = { users: [{emailAddress: {errorKeys: [], value: email},
+        firstName: {value: ''},
+        lastName: {value: ''},
+        testing: {value: false}
+      }]}
+
+      # Fetch the number of users *before* we remove remove our user (You are awesome Apple)
+      num_testers_before_delete = num_testers
+
+      # POST
+      response = request(url, :post, params.to_json)
+
+      raise TestFlight::RemoveTesterException.new("server error") if response.code.to_i == 500 # 500 if tester already exists... This is not how you HTTP, Apple.
+
+      result = JSON.parse(response.body)
+
+      # Now fetch the number of users *after* the DELETE.  Apple sure must hate developers...
+      num_testers_after_delete = result["data"]["users"].count
+
+      # If DELETE was successful, there should be 1 less user from num_testers
+      num_testers_deleted = num_testers_before_delete - num_testers_after_delete;
+
+      raise RemoveTesterException.new("failed to remove tester #{email}") if num_testers_deleted == 0
+
+      return JSON.parse(response.body)['statusCode']
+    end
+
     def num_testers
       login
       url = "/WebObjects/iTunesConnect.woa/ra/user/externalTesters/#{@app_id}/"
@@ -91,6 +126,7 @@ module TestFlight
     private
 
     def login
+      return if @logged_in
       # Go to the iTunes Connect website and retrieve the form action for logging into the site.
       url = "/WebObjects/iTunesConnect.woa"
       response = request(url, :get)
@@ -103,6 +139,7 @@ module TestFlight
       if response.body.include?('Your Apple ID or password was entered incorrectly.')
         raise TestFlight::ITCException.new('User or password incorrect.')
       end
+      @logged_in = true
     end
 
     def request(url, method, params = nil)
