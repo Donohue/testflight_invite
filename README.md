@@ -59,5 +59,4 @@ This script is heavily based off of the [appdailysales](https://github.com/kirby
 
 testflight\_invite.py was created by [Donohue](https://github.com/Donohue)
 
-testflight\_invite.rb was created by [dmagliola](https://github.com/dmagliola)
-
+testflight\_invite.rb was created by [dmagliola](https://github.com/dmagliola) with contributions from [christocracy](https://github.com/christocracy)
