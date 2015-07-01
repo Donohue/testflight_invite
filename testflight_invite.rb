@@ -71,13 +71,19 @@ module TestFlight
       @logged_in = false
     end
 
-    def add_tester(email, first_name = '', last_name = '')
+    def add_tester(email, first_name = '', last_name = '', group_id = '')
       login
       url = "/WebObjects/iTunesConnect.woa/ra/user/externalTesters/#{@app_id}/"
       params = { users: [{emailAddress: {errorKeys: [], value: email},
                           firstName: {value: first_name},
                           lastName: {value: last_name},
-                          testing: {value: true}
+                          testing: {value: true},
+                          # you can determine group id from the web interface
+                          # using network inspector
+                          groups: [{
+                              id: group_id,
+                              isSelected: true
+                            }]
                          }]}
 
       response = request(url, :post, params.to_json)
