@@ -71,20 +71,21 @@ module TestFlight
       @logged_in = false
     end
 
-    def add_tester(email, first_name = '', last_name = '', group_id = '')
+    def add_tester(email, first_name = '', last_name = '', group_id = nil)
       login
       url = "/WebObjects/iTunesConnect.woa/ra/user/externalTesters/#{@app_id}/"
       params = { users: [{emailAddress: {errorKeys: [], value: email},
                           firstName: {value: first_name},
                           lastName: {value: last_name},
-                          testing: {value: true},
-                          # you can determine group id from the web interface
-                          # using network inspector
-                          groups: [{
-                              id: group_id,
-                              isSelected: true
-                            }]
+                          testing: {value: true}
                          }]}
+
+      if group_id
+        params[:users][0][:groups] = [{
+          id: group_id,
+          isSelected: true
+          }]
+      end
 
       response = request(url, :post, params.to_json)
       raise TestFlight::InviteDuplicateException.new if response.code.to_i == 500 # 500 if tester already exists... This is not how you HTTP, Apple.
