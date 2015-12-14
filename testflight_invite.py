@@ -85,14 +85,14 @@ class TestFlightInvite:
         self.itcLogin = itcLogin
         self.itcPassword = itcPassword
         self.appId = str(appId)
+        self._service_key = None
         self.proxy = proxy
         self.opener = self.createOpener()
 
-    def readHtml(self, url, data=None):
-        request = urllib2.Request(url, data)
+    def readData(self, url, data=None, headers={}):
+        request = urllib2.Request(url, data, headers)
         urlHandle = self.opener.open(request)
-        html = urlHandle.read()
-        return html
+        return urlHandle.read()
 
     def createOpener(self):
         handlers = []                                                       # proxy support
@@ -105,38 +105,76 @@ class TestFlightInvite:
         handlers.append(cjhdr)                                              # proxy support
         return urllib2.build_opener(*handlers)                              # proxy support
 
-    def login(self):
-        # Go to the iTunes Connect website and retrieve the
-        # form action for logging into the site.
-        urlWebsite = self.urlITCBase % '/WebObjects/iTunesConnect.woa'
-        html = self.readHtml(urlWebsite)
-        match = re.search('" action="(.*)"', html)
-        urlActionLogin = self.urlITCBase % match.group(1)
+    @property
+    def service_key(self):
+        if self._service_key:
+            return self._service_key
 
-        # Login to iTunes Connect web site
-        webFormLoginData = urllib.urlencode({'theAccountName':self.itcLogin, 'theAccountPW':self.itcPassword, '1.Continue':'0'})
-        html = self.readHtml(urlActionLogin, webFormLoginData)
-        if (html.find('Your Apple ID or password was entered incorrectly.') != -1):
-            raise ITCException, 'User or password incorrect.'
+        jsUrl = self.urlITCBase % '/itc/static-resources/controllers/login_cntrl.js'
+        content = self.readData(jsUrl)
+        matches = re.search(r"itcServiceKey = '(.*)'", content)
+        if not matches:
+            raise ValueError('Unable to find iTunes Connect Service key')
+        return matches.group(1)
+
+    def login(self):
+        data = {
+            'accountName': self.itcLogin,
+            'password': self.itcPassword,
+            'rememberMe': 'false'
+        }
+        headers = {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json, text/javascript'
+        }
+
+        loginUrl = 'https://idmsa.apple.com/appleauth/auth/signin?widgetKey=%s' % self.service_key
+        self.readData(
+            'https://idmsa.apple.com/appleauth/auth/signin?widgetKey=%s' % self.service_key,
+            data=json.dumps(data),
+            headers=headers
+        )
+        self.readData("https://itunesconnect.apple.com/WebObjects/iTunesConnect.woa/wa/route?noext")
+        self.readData("https://itunesconnect.apple.com/WebObjects/iTunesConnect.woa")    
 
     def numTesters(self):
         self.login()
         endpoint = '/WebObjects/iTunesConnect.woa/ra/user/externalTesters/%s/' % self.appId
         urlWebsiteExternalTesters = self.urlITCBase % endpoint
-        externalResponse = self.readHtml(urlWebsiteExternalTesters)
+        externalResponse = self.readData(
+            "https://itunesconnect.apple.com/WebObjects/iTunesConnect.woa/ra/user/externalTesters/%s/" % self.appId,
+            headers={'Content-Type': 'application/json'}
+        )
         data = json.loads(externalResponse)
         return len(data['data']['users'])
 
     def addTester(self, email, firstname='', lastname=''):
         self.login()
-        endpoint = '/WebObjects/iTunesConnect.woa/ra/user/externalTesters/%s/' % self.appId
-        urlWebsiteExternalInvite = self.urlITCBase % endpoint
-        params = {'users': [{'emailAddress': {'errorKeys':[], 'value': email},
-                             'firstName': {'value': firstname},
-                             'lastName': {'value': lastname},
-                             'testing': {'value': 'true'}}]}
+        params = {
+            'users': [
+                {
+                    'emailAddress': {
+                        'value': email
+                    },
+                    'firstName': {
+                        'value': firstname
+                    },
+                    'lastName': {
+                        'value': lastname
+                    },
+                    'testing': {
+                        'value': 'true'
+                    }
+                }
+            ]
+        }
         try:
-            return self.readHtml(urlWebsiteExternalInvite, json.dumps(params))
+            return self.readData(
+                'https://itunesconnect.apple.com/WebObjects/iTunesConnect.woa/ra/user/externalTesters/%s/' % self.appId,
+                json.dumps(params),
+                headers={'Content-Type': 'application/json'}
+            )
         except urllib2.HTTPError as e:
             if e.code == 500: # 500 if tester already exists... This is not how you HTTP, Apple.
                 raise TFInviteDuplicateException
