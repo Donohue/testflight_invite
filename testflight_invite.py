@@ -135,8 +135,7 @@ class TestFlightInvite:
             data=json.dumps(data),
             headers=headers
         )
-        self.readData("https://itunesconnect.apple.com/WebObjects/iTunesConnect.woa/wa/route?noext")
-        self.readData("https://itunesconnect.apple.com/WebObjects/iTunesConnect.woa")    
+        self.readData("https://itunesconnect.apple.com/WebObjects/iTunesConnect.woa/wa")
 
     def numTesters(self):
         self.login()
