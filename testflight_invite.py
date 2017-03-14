@@ -178,14 +178,14 @@ class TestFlightInvite:
             if e.code == 500: # 500 if tester already exists... This is not how you HTTP, Apple.
                 raise TFInviteDuplicateException
             raise
-            
+
 def usage():
-    print 'Usage: %s <iTC login email> <App ID> <Invitee Email> <Invitee First Name (Optional)> <Invitee Last Name (Optional)'
+    print 'Usage: %s <iTC login email> <App ID> <Invitee Email> <Invitee First Name (Optional)> <Invitee Last Name (Optional)' % sys.argv[0]
 
 def main():
     if len(sys.argv) < 4:
         usage()
-        return -1 
+        return -1
 
     itcLogin = sys.argv[1]
 
@@ -221,4 +221,3 @@ def main():
 
 if __name__ == '__main__':
     sys.exit(main())
-
