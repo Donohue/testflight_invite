@@ -52,7 +52,11 @@ import cookielib
 import re
 import sys
 import os
+import requests
 from getpass import getpass
+
+import logging
+logger = logging.getLogger(__name__)
 
 class ITCException(Exception):
     def __init__(self,value):
@@ -81,16 +85,23 @@ class MyCookieJar(cookielib.CookieJar):
 class TestFlightInvite:
     urlITCBase = 'https://itunesconnect.apple.com%s'
 
-    def __init__(self, itcLogin, itcPassword, appId, proxy=''):
+    def __init__(self, itcLogin, itcPassword, appId, proxy='', groupId=None, contentProviderId=None):
         self.itcLogin = itcLogin
         self.itcPassword = itcPassword
         self.appId = str(appId)
         self._service_key = None
         self.proxy = proxy
+        if groupId is not None:
+            self.groupId = groupId
+        if contentProviderId is not None:
+            self.contentProviderId = contentProviderId
         self.opener = self.createOpener()
+        self.loggedIn = False
 
-    def readData(self, url, data=None, headers={}):
+    def readData(self, url, data=None, headers={}, method=None):
         request = urllib2.Request(url, data, headers)
+        if method is not None:
+            request.get_method = lambda: method
         urlHandle = self.opener.open(request)
         return urlHandle.read()
 
@@ -117,25 +128,62 @@ class TestFlightInvite:
             raise ValueError('Unable to find iTunes Connect Service key')
         return matches.group(1)
 
-    def login(self):
-        data = {
-            'accountName': self.itcLogin,
-            'password': self.itcPassword,
-            'rememberMe': 'false'
-        }
-        headers = {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            'Accept': 'application/json, text/javascript'
-        }
+    def getGroups(self):
+        text = self.readData('https://itunesconnect.apple.com/testflight/v2/providers/{teamId}/apps/{appId}/groups'.format(
+            teamId=self.contentProviderId, appId=self.appId
+        ))
+        data = json.loads(text)
+        return data['data']
 
-        loginUrl = 'https://idmsa.apple.com/appleauth/auth/signin?widgetKey=%s' % self.service_key
-        self.readData(
-            'https://idmsa.apple.com/appleauth/auth/signin?widgetKey=%s' % self.service_key,
-            data=json.dumps(data),
-            headers=headers
-        )
-        self.readData("https://itunesconnect.apple.com/WebObjects/iTunesConnect.woa/wa")
+    def getDefaultExternalGroupId(self):
+        if not hasattr(self, 'groupData'):
+            self.groupData = self.getGroups()
+        defaultExternalGroups = [g for g in self.groupData if g['isDefaultExternalGroup']]
+        if len(defaultExternalGroups) > 0:
+            return defaultExternalGroups.pop()['id']
+        else:
+            return None
+
+    def getFirstContentProviderId(self):
+        # Sample return value
+        # => {"associatedAccounts"=>
+        #   [{"contentProvider"=>{"contentProviderId"=>11142800, "name"=>"Felix Krause", "contentProviderTypes"=>["Purple Software"]}, "roles"=>["Developer"], "lastLogin"=>1468784113000}],
+        #  "sessionToken"=>{"dsId"=>"8501011116", "contentProviderId"=>18111111, "expirationDate"=>nil, "ipAddress"=>nil},
+        text = self.readData("https://itunesconnect.apple.com/WebObjects/iTunesConnect.woa/ra/user/detail")
+        data = json.loads(text)
+        account = data['data']['associatedAccounts'][0]
+        return account['contentProvider']['contentProviderId']
+
+    def login(self):
+        if not self.loggedIn:
+            data = {
+                'accountName': self.itcLogin,
+                'password': self.itcPassword,
+                'rememberMe': 'false'
+            }
+            headers = {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json, text/javascript'
+            }
+
+            loginUrl = 'https://idmsa.apple.com/appleauth/auth/signin?widgetKey=%s' % self.service_key
+            self.readData(
+                'https://idmsa.apple.com/appleauth/auth/signin?widgetKey=%s' % self.service_key,
+                data=json.dumps(data),
+                headers=headers
+            )
+
+            if not hasattr(self, 'contentProviderId'):
+                self.contentProviderId = self.getFirstContentProviderId()
+                logger.info('Guessed contentProviderId: {}'.format(self.contentProviderId))
+                # print self.contentProviderId
+
+            if not hasattr(self, 'groupId'):
+                self.groupId = self.getDefaultExternalGroupId()
+                logger.info('Guessed groupId: {}'.format(self.groupId))
+
+        self.loggedIn = True
 
     def numTesters(self):
         self.login()
@@ -150,33 +198,35 @@ class TestFlightInvite:
 
     def addTester(self, email, firstname='', lastname=''):
         self.login()
-        params = {
-            'users': [
-                {
-                    'emailAddress': {
-                        'value': email
-                    },
-                    'firstName': {
-                        'value': firstname
-                    },
-                    'lastName': {
-                        'value': lastname
-                    },
-                    'testing': {
-                        'value': 'true'
-                    }
-                }
-            ]
-        }
+        params = { 'email': email, 'firstName': firstname, 'lastName': lastname }
         try:
-            return self.readData(
-                'https://itunesconnect.apple.com/WebObjects/iTunesConnect.woa/ra/user/externalTesters/%s/' % self.appId,
+            text = self.readData(
+                'https://itunesconnect.apple.com/testflight/v2/providers/{teamId}/apps/{appId}/testers'.format(
+                    teamId=self.contentProviderId, appId=self.appId
+                ),
                 json.dumps(params),
                 headers={'Content-Type': 'application/json'}
             )
         except urllib2.HTTPError as e:
-            if e.code == 500: # 500 if tester already exists... This is not how you HTTP, Apple.
-                raise TFInviteDuplicateException
+            raise
+
+        testerResponseBody = json.loads(text)
+        testerId = testerResponseBody['data']['id']
+        params = {
+            'groupId': self.groupId,
+            'testerId': testerId,
+        }
+
+        try:
+            return self.readData(
+                'https://itunesconnect.apple.com/testflight/v2/providers/{teamId}/apps/{appId}/groups/{groupId}/testers/{testerId}'.format(
+                    teamId=self.contentProviderId, appId=self.appId, groupId=self.groupId, testerId=testerId
+                ),
+                json.dumps(params),
+                headers={'Content-Type': 'application/json'},
+                method='PUT'
+            )
+        except urllib2.HTTPError as e:
             raise
 
 def usage():
