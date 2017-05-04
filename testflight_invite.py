@@ -52,11 +52,7 @@ import cookielib
 import re
 import sys
 import os
-import requests
 from getpass import getpass
-
-import logging
-logger = logging.getLogger(__name__)
 
 class ITCException(Exception):
     def __init__(self,value):
@@ -91,10 +87,8 @@ class TestFlightInvite:
         self.appId = str(appId)
         self._service_key = None
         self.proxy = proxy
-        if groupId is not None:
-            self.groupId = groupId
-        if contentProviderId is not None:
-            self.contentProviderId = contentProviderId
+        self.groupId = groupId
+        self.contentProviderId = contentProviderId
         self.opener = self.createOpener()
         self.loggedIn = False
 
@@ -136,13 +130,11 @@ class TestFlightInvite:
         return data['data']
 
     def getDefaultExternalGroupId(self):
-        if not hasattr(self, 'groupData'):
-            self.groupData = self.getGroups()
-        defaultExternalGroups = [g for g in self.groupData if g['isDefaultExternalGroup']]
-        if len(defaultExternalGroups) > 0:
-            return defaultExternalGroups.pop()['id']
-        else:
-            return None
+        self.groupData = self.getGroups()
+        for group in self.groupData:
+            if group['isDefaultExternalGroup']:
+                return group['id']
+        return None
 
     def getFirstContentProviderId(self):
         # Sample return value
@@ -155,33 +147,31 @@ class TestFlightInvite:
         return account['contentProvider']['contentProviderId']
 
     def login(self):
-        if not self.loggedIn:
-            data = {
-                'accountName': self.itcLogin,
-                'password': self.itcPassword,
-                'rememberMe': 'false'
-            }
-            headers = {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json, text/javascript'
-            }
+        if self.loggedIn:
+            return
 
-            loginUrl = 'https://idmsa.apple.com/appleauth/auth/signin?widgetKey=%s' % self.service_key
-            self.readData(
-                'https://idmsa.apple.com/appleauth/auth/signin?widgetKey=%s' % self.service_key,
-                data=json.dumps(data),
-                headers=headers
-            )
-
-            if not hasattr(self, 'contentProviderId'):
-                self.contentProviderId = self.getFirstContentProviderId()
-                logger.info('Guessed contentProviderId: {}'.format(self.contentProviderId))
-                # print self.contentProviderId
-
-            if not hasattr(self, 'groupId'):
-                self.groupId = self.getDefaultExternalGroupId()
-                logger.info('Guessed groupId: {}'.format(self.groupId))
+        data = {
+            'accountName': self.itcLogin,
+            'password': self.itcPassword,
+            'rememberMe': 'false'
+        }
+        headers = {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json, text/javascript'
+        }
+        
+        loginUrl = 'https://idmsa.apple.com/appleauth/auth/signin?widgetKey=%s' % self.service_key
+        self.readData(
+            'https://idmsa.apple.com/appleauth/auth/signin?widgetKey=%s' % self.service_key,
+            data=json.dumps(data),
+            headers=headers
+        )
+        
+        if not self.contentProviderId:
+            self.contentProviderId = self.getFirstContentProviderId()
+        if not self.groupId:
+            self.groupId = self.getDefaultExternalGroupId()
 
         self.loggedIn = True
 
@@ -199,16 +189,13 @@ class TestFlightInvite:
     def addTester(self, email, firstname='', lastname=''):
         self.login()
         params = { 'email': email, 'firstName': firstname, 'lastName': lastname }
-        try:
-            text = self.readData(
-                'https://itunesconnect.apple.com/testflight/v2/providers/{teamId}/apps/{appId}/testers'.format(
-                    teamId=self.contentProviderId, appId=self.appId
-                ),
-                json.dumps(params),
-                headers={'Content-Type': 'application/json'}
-            )
-        except urllib2.HTTPError as e:
-            raise
+        text = self.readData(
+            'https://itunesconnect.apple.com/testflight/v2/providers/{teamId}/apps/{appId}/testers'.format(
+                teamId=self.contentProviderId, appId=self.appId
+            ),
+            json.dumps(params),
+            headers={'Content-Type': 'application/json'}
+        )
 
         testerResponseBody = json.loads(text)
         testerId = testerResponseBody['data']['id']
@@ -217,17 +204,14 @@ class TestFlightInvite:
             'testerId': testerId,
         }
 
-        try:
-            return self.readData(
-                'https://itunesconnect.apple.com/testflight/v2/providers/{teamId}/apps/{appId}/groups/{groupId}/testers/{testerId}'.format(
-                    teamId=self.contentProviderId, appId=self.appId, groupId=self.groupId, testerId=testerId
-                ),
-                json.dumps(params),
-                headers={'Content-Type': 'application/json'},
-                method='PUT'
-            )
-        except urllib2.HTTPError as e:
-            raise
+        return self.readData(
+            'https://itunesconnect.apple.com/testflight/v2/providers/{teamId}/apps/{appId}/groups/{groupId}/testers/{testerId}'.format(
+                teamId=self.contentProviderId, appId=self.appId, groupId=self.groupId, testerId=testerId
+            ),
+            json.dumps(params),
+            headers={'Content-Type': 'application/json'},
+            method='PUT'
+        )
 
 def usage():
     print 'Usage: %s <iTC login email> <App ID> <Invitee Email> <Invitee First Name (Optional)> <Invitee Last Name (Optional)' % sys.argv[0]
